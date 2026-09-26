@@ -17,7 +17,7 @@
 
 ## 🎬 Demonstration
 
-> 📺 **Video Overview & Walkthrough**: _(Link coming soon on [Chris Figures It Out](https://www.youtube.com/@ChrisAutodidacte))_
+> 📺 **Video Overview & Walkthrough**: _(Link coming soon on [Chris Figures It Out](https://www.youtube.com/@ChrisFiguresItOut))_
 >
 > Prefer a written walkthrough? Check out our **[Step-by-Step Installation Tutorial](docs/step-by-step-tutorial.md)**.
 
