@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}{{ (article.titre_article or article.titre_brut or 'Article')[:50] }} — News Monitor Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <a href="/articles" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h5 class="mb-0">{{ article.titre_article or article.titre_brut or 'Untitled Article' }}</h5>
+</div>
+
+<div class="row g-4">
+
+  <!-- Main column -->
+  <div class="col-md-8">
+    <div class="card p-4 mb-4">
+      <h6 class="text-muted mb-3">AI Summary</h6>
+      <p class="mb-3">{{ article.resume_court or '—' }}</p>
+      {% if article.resume_long %}
+      <hr>
+      <p class="text-muted small">{{ article.resume_long }}</p>
+      {% endif %}
+    </div>
+
+    {% if article.texte_brut %}
+    <div class="card p-4">
+      <h6 class="text-muted mb-3">Raw Content <small class="fw-normal">({{ article.texte_brut|length }} chars)</small></h6>
+      <pre class="small text-muted" style="white-space:pre-wrap;max-height:300px;overflow-y:auto">{{ article.texte_brut[:2000] }}{% if article.texte_brut|length > 2000 %}…{% endif %}</pre>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Metadata sidebar -->
+  <div class="col-md-4">
+
+    <!-- Status -->
+    <div class="card p-3 mb-3">
+      <h6 class="text-muted mb-3">Status</h6>
+      <span class="badge badge-{{ article.statut }} fs-6 mb-3">{{ article.statut }}</span>
+      <form action="/articles/{{ article.id }}/statut" method="post">
+        <select name="statut" class="form-select form-select-sm mb-2">
+          <option value="a_analyser" {{ 'selected' if article.statut == 'a_analyser' }}>Pending (a_analyser)</option>
+          <option value="analyse"    {{ 'selected' if article.statut == 'analyse' }}>Analyzed (analyse)</option>
+          <option value="erreur"     {{ 'selected' if article.statut == 'erreur' }}>Error (erreur)</option>
+        </select>
+        <button class="btn btn-sm btn-outline-primary w-100">Update Status</button>
+      </form>
+    </div>
+
+    <!-- Details -->
+    <div class="card p-3 mb-3">
+      <h6 class="text-muted mb-3">Metadata</h6>
+      <table class="table table-sm mb-0">
+        <tr><td class="text-muted">Source</td><td>{{ article.source_nom or '—' }}</td></tr>
+        <tr><td class="text-muted">Profile</td><td>{{ article.profil_analyse or '—' }}</td></tr>
+        <tr><td class="text-muted">Origin</td><td>{{ article.origine_texte or '—' }}</td></tr>
+        <tr><td class="text-muted">Collected</td><td>{{ article.date_collecte.strftime('%Y-%m-%d %H:%M') if article.date_collecte else '—' }}</td></tr>
+        <tr><td class="text-muted">Analyzed</td><td>{{ article.date_analyse.strftime('%Y-%m-%d %H:%M') if article.date_analyse else '—' }}</td></tr>
+        {% if article.url_source and article.url_source != 'none' and article.url_source != 'aucune' %}
+        <tr><td class="text-muted">URL</td><td><a href="{{ article.url_source }}" target="_blank" class="small">Open source <i class="bi bi-box-arrow-up-right"></i></a></td></tr>
+        {% endif %}
+      </table>
+    </div>
+
+    <!-- Ollama AI Analysis -->
+    {% if article.theme_principal or article.public_cible or article.mots_cles %}
+    <div class="card p-3">
+      <h6 class="text-muted mb-3">Ollama Analysis</h6>
+      {% if article.theme_principal %}
+      <div class="mb-2"><small class="text-muted">Topic</small><br><strong>{{ article.theme_principal }}</strong></div>
+      {% endif %}
+      {% if article.public_cible %}
+      <div class="mb-2"><small class="text-muted">Target Audience</small><br>{{ article.public_cible }}</div>
+      {% endif %}
+      {% if article.mots_cles %}
+      <div>
+        <small class="text-muted">Keywords</small><br>
+        {% for mc in article.mots_cles %}
+        <span class="badge bg-light text-dark border me-1 mb-1">{{ mc }}</span>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if article.erreur_detail %}
+      <div class="alert alert-danger mt-2 mb-0 small">{{ article.erreur_detail }}</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

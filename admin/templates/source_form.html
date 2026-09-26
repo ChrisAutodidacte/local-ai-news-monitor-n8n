@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if source else 'New' }} Source — News Monitor Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <a href="/sources" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i></a>
+  <h4 class="mb-0">{{ 'Edit' if source else 'New' }} Source</h4>
+</div>
+
+<div class="card p-4" style="max-width:720px">
+  <form method="post">
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Name</label>
+      <input type="text" name="nom" class="form-control"
+             value="{{ source.nom if source else '' }}" required>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Source Type</label>
+        <select name="type_source" id="type_source" class="form-select" required>
+          {% for t in types %}
+          <option value="{{ t }}" {{ 'selected' if source and source.type_source == t }}>{{ t }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6">
+        <label class="form-label fw-semibold">Analysis Profile</label>
+        <select name="profil_analyse" class="form-select" required>
+          {% for p in profils %}
+          <option value="{{ p }}" {{ 'selected' if source and source.profil_analyse == p }}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" name="actif" id="actif"
+               {{ 'checked' if not source or source.actif }}>
+        <label class="form-check-label" for="actif">Active source</label>
+      </div>
+    </div>
+
+    <hr>
+
+    <!-- Search fields -->
+    <div id="fields-search">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Search Query</label>
+        <input type="text" name="search_query" class="form-control"
+               value="{{ source.config.get('search_query','') if source else '' }}"
+               placeholder="e.g. AI automation for small business">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Max Results</label>
+        <input type="number" name="max_results" class="form-control" min="1" max="20"
+               value="{{ source.config.get('max_results', 5) if source else 5 }}">
+      </div>
+    </div>
+
+    <!-- Web scraping fields -->
+    <div id="fields-web_scraping">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Index Page URL</label>
+        <input type="url" name="url" class="form-control"
+               value="{{ source.config.get('url','') if source else '' }}"
+               placeholder="https://www.anthropic.com/news">
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-8">
+          <label class="form-label fw-semibold">Article URL Pattern</label>
+          <input type="text" name="motif_url" class="form-control"
+                 value="{{ source.config.get('motif_url','') if source else '' }}"
+                 placeholder="e.g. /news/">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Max Articles</label>
+          <input type="number" name="max" class="form-control" min="1" max="20"
+                 value="{{ source.config.get('max', 5) if source else 5 }}">
+        </div>
+      </div>
+    </div>
+
+    <!-- Email fields -->
+    <div id="fields-email">
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Sender (email)</label>
+        <input type="text" name="sender" class="form-control"
+               value="{{ source.config.get('sender','') if source else '' }}"
+               placeholder="newsletter@example.com">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Gmail Label</label>
+        <input type="text" name="gmail_label" class="form-control"
+               value="{{ source.config.get('gmail_label','') if source else '' }}"
+               placeholder="Newsletter">
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Newsletter Topic</label>
+      <select name="theme" class="form-select">
+        <option value="">-- None (source not offered to subscribers) --</option>
+        {% for t in themes_newsletter %}
+        <option value="{{ t }}" {{ 'selected' if source and source.theme == t }}>{{ t }}</option>
+        {% endfor %}
+      </select>
+      <div class="form-text">
+        Topic associated with this source for subscribers.
+        <a href="/themes" target="_blank">Manage topics →</a>
+      </div>
+    </div>
+
+    <hr>
+
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Priority Keywords <small class="text-muted">(comma-separated)</small></label>
+      <input type="text" name="priorites" class="form-control"
+             value="{{ source.config.get('priorites', [])|join(', ') if source else '' }}"
+             placeholder="AI, automation, open source">
+    </div>
+    <div class="mb-4">
+      <label class="form-label fw-semibold">Keywords to Ignore <small class="text-muted">(comma-separated)</small></label>
+      <input type="text" name="ignore" class="form-control"
+             value="{{ source.config.get('ignore', [])|join(', ') if source else '' }}"
+             placeholder="sponsored, promo, ads">
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">
+        <i class="bi bi-check-lg"></i> {{ 'Save Changes' if source else 'Create Source' }}
+      </button>
+      <a href="/sources" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const typeSource = document.getElementById('type_source');
+const allFields = { search: 'fields-search', web_scraping: 'fields-web_scraping', email: 'fields-email' };
+
+function showFields() {
+  Object.values(allFields).forEach(id => document.getElementById(id).style.display = 'none');
+  const active = allFields[typeSource.value];
+  if (active) document.getElementById(active).style.display = 'block';
+}
+
+typeSource.addEventListener('change', showFields);
+showFields();
+</script>
+{% endblock %}

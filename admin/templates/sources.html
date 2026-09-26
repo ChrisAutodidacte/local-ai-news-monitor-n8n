@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block title %}Sources — News Monitor Admin{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h4 class="mb-0"><i class="bi bi-collection"></i> Monitoring Sources</h4>
+  <a href="/sources/new" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Source</a>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Profile</th>
+          <th>Config</th>
+          <th>Active</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sources %}
+        <tr>
+          <td class="fw-semibold">{{ s.nom }}</td>
+          <td><span class="badge badge-{{ s.type_source }}">{{ s.type_source }}</span></td>
+          <td><small class="text-muted">{{ s.profil_analyse }}</small></td>
+          <td>
+            <small class="text-muted">
+              {% if s.type_source == 'search' %}
+                🔍 {{ s.config.get('search_query', '')[:50] }}
+              {% elif s.type_source == 'web_scraping' %}
+                🌐 {{ s.config.get('url', '')[:50] }}
+              {% elif s.type_source == 'email' %}
+                ✉️ {{ s.config.get('sender', '')[:50] }}
+              {% endif %}
+            </small>
+          </td>
+          <td>
+            <div class="form-check form-switch">
+              <input class="form-check-input toggle-actif" type="checkbox"
+                     data-id="{{ s.id }}"
+                     {% if s.actif %}checked{% endif %}>
+            </div>
+          </td>
+          <td class="text-end">
+            <a href="/sources/{{ s.id }}/edit" class="btn btn-sm btn-outline-secondary me-1">
+              <i class="bi bi-pencil"></i>
+            </a>
+            <form action="/sources/{{ s.id }}/delete" method="post" class="d-inline"
+                  onsubmit="return confirm('Delete source « {{ s.nom }} »?')">
+              <button class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No monitoring sources configured</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.toggle-actif').forEach(cb => {
+  cb.addEventListener('change', async function() {
+    const res = await fetch(`/sources/${this.dataset.id}/toggle`, { method: 'POST' });
+    const data = await res.json();
+    this.checked = data.actif;
+  });
+});
+</script>
+{% endblock %}

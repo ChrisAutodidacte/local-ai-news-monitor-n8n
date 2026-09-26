@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block title %}Newsletter Subscribers — News Monitor Admin{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4 gap-3">
+  <h4 class="mb-0">Newsletter Subscribers</h4>
+  <a href="/subscribers/new" class="btn btn-primary btn-sm ms-auto">
+    <i class="bi bi-plus-lg"></i> Add Subscriber
+  </a>
+</div>
+
+{% if not abonnes %}
+  <p class="text-muted">No subscribers yet.</p>
+{% else %}
+<div class="card">
+  <table class="table table-hover mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>First Name</th>
+        <th>Email</th>
+        <th>Subscribed Topics</th>
+        <th>Frequency</th>
+        <th>Status</th>
+        <th>Joined</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for a in abonnes %}
+    <tr>
+      <td class="fw-semibold">{{ a.prenom }}</td>
+      <td>{{ a.email }}</td>
+      <td>
+        {% for t in a.themes %}
+          <span class="badge bg-info text-dark me-1">{{ t }}</span>
+        {% endfor %}
+      </td>
+      <td>{{ a.periodicite | capitalize }}</td>
+      <td>
+        <button class="btn btn-sm {{ 'btn-success' if a.actif else 'btn-secondary' }} toggle-abonne"
+                data-id="{{ a.id }}">
+          {{ 'Active' if a.actif else 'Inactive' }}
+        </button>
+      </td>
+      <td>{{ a.date_inscription.strftime('%Y-%m-%d') if a.date_inscription else '—' }}</td>
+      <td class="text-end">
+        <a href="/subscribers/{{ a.id }}/edit" class="btn btn-sm btn-outline-secondary" title="Edit">
+          <i class="bi bi-pencil"></i>
+        </a>
+        <a href="/subscribers/{{ a.id }}/history" class="btn btn-sm btn-outline-info" title="History">
+          <i class="bi bi-clock-history"></i>
+        </a>
+        <form method="post" action="/subscribers/{{ a.id }}/delete" class="d-inline"
+              onsubmit="return confirm('Delete subscriber {{ a.prenom }} ({{ a.email }})?')">
+          <button class="btn btn-sm btn-outline-danger" title="Delete"><i class="bi bi-trash"></i></button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelectorAll('.toggle-abonne').forEach(btn => {
+  btn.addEventListener('click', () => {
+    fetch(`/subscribers/${btn.dataset.id}/toggle`, { method: 'POST' })
+      .then(r => r.json())
+      .then(() => location.reload());
+  });
+});
+</script>
+{% endblock %}

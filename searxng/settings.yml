@@ -1,0 +1,25 @@
+# =============================================================================
+#  SearXNG Configuration — Local AI News Monitor & Newsletter
+# =============================================================================
+#  The crucial setting for this project is enabling the JSON output format,
+#  as n8n workflows query SearXNG via its JSON API:
+#  (http://searxng:8080/search?format=json&q=...).
+#
+#  The secret key is injected via the SEARXNG_SECRET environment variable
+#  (see docker-compose.yml and .env). Upon initial start, SearXNG populates
+#  missing defaults automatically.
+# =============================================================================
+
+use_default_settings: true
+
+server:
+  # Overridden by SEARXNG_SECRET at runtime; fallback value for the repo.
+  secret_key: "change-me"
+  limiter: false
+  image_proxy: true
+
+search:
+  # Formats exposed by the API. "json" is required for automated n8n collection.
+  formats:
+    - html
+    - json

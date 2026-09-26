@@ -1,0 +1,351 @@
+{
+  "name": "WF-Newsletter-Builder",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1440,
+        272
+      ],
+      "id": "4373833c-7e3b-4341-88fa-a77dfae652c4",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 6
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1440,
+        80
+      ],
+      "id": "d2309898-b6f9-40f5-ae73-9125fd44436e",
+      "name": "Schedule Trigger (6h)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, prenom, email, themes, periodicite FROM newsletter_abonnes WHERE actif = true;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1200,
+        160
+      ],
+      "id": "8801dd7c-6533-489d-b405-a84778760816",
+      "name": "Abonnés actifs",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const dow = new Date().getDay();\nconst day = new Date().getDate();\nreturn $input.all().filter(item => {\n  const p = (item.json.periodicite || '').toLowerCase();\n  if (p === 'daily' || p === 'quotidien')    return true;\n  if (p === 'weekly' || p === 'hebdomadaire') return dow === 1;\n  if (p === 'monthly' || p === 'mensuel')      return day === 1;\n  return false;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -960,
+        160
+      ],
+      "id": "2d73ec37-e5df-4ca5-ab6d-6ffa278bd6fa",
+      "name": "Filtre périodicité"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -752,
+        16
+      ],
+      "id": "df03b1ab-20f1-4cf4-8589-aaa4697586da",
+      "name": "Loop Over Abonnés"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id, a.titre_article, a.resume_court, a.theme_principal,\n       a.url_source, a.mots_cles, a.date_analyse\nFROM articles_veille a\nJOIN sources_veille s ON s.id = a.source_id\nWHERE s.theme IN ('{{ $('Loop Over Abonnés').item.json.themes.join(\"','\") }}')\n  AND a.statut = 'analyse'\n  AND a.id NOT IN (\n    SELECT article_id FROM newsletter_envois WHERE abonne_id = {{ $('Loop Over Abonnés').item.json.id }}\n  )\nORDER BY a.date_analyse DESC\nLIMIT 30;",
+        "options": {
+          "queryReplacement": "={{ '{\"' + $('Loop Over Abonnés').item.json.themes.join('\",\"') + '\"}' }}\n{{ $('Loop Over Abonnés').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -464,
+        -80
+      ],
+      "id": "187052aa-13de-46d3-af21-5ba92f8a3398",
+      "name": "Articles éligibles",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b1000001-cond-0001",
+              "leftValue": "={{ $items().length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -224,
+        -16
+      ],
+      "id": "aea4ae04-5e06-4c2d-9917-628151a58f86",
+      "name": "Si articles trouvés"
+    },
+    {
+      "parameters": {
+        "jsCode": "const abonne = $('Loop Over Abonnés').item.json;\nconst articles = $input.all().map(i => i.json);\n\nconst dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });\nconst HEADER = '#1a1a2e';\nconst ACCENT = '#457b9d';\nconst FOND = '#f8f9fa';\nconst TEXTE = '#333333';\nconst SEC = '#666666';\nconst TAG_BG = '#e8f4f8';\nconst TAG_TXT = '#2c6e8a';\n\nfunction badge(mot) {\n  return '<span style=\"display:inline-block;background:' + TAG_BG + ';color:' + TAG_TXT + ';font-size:11px;padding:2px 8px;border-radius:12px;margin:2px 3px 2px 0;\">' + mot + '</span>';\n}\n\nfunction carteArticle(a) {\n  const lien = (a.url_source && a.url_source !== 'none' && a.url_source !== 'aucune')\n    ? '<a href=\"' + a.url_source + '\" style=\"display:inline-block;margin-top:10px;color:' + ACCENT + ';font-size:12px;text-decoration:none;border:1px solid ' + ACCENT + ';padding:3px 10px;border-radius:4px;\">Read Source &rarr;</a>'\n    : '';\n  let mots = [];\n  try { mots = Array.isArray(a.mots_cles) ? a.mots_cles : JSON.parse(a.mots_cles || '[]'); } catch(e) {}\n  return '<div style=\"background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:16px 20px;margin-bottom:12px;\">'\n    + '<p style=\"margin:0 0 6px 0;font-size:16px;font-weight:bold;color:' + TEXTE + ';\">' + (a.titre_article || '(Untitled)') + '</p>'\n    + '<p style=\"margin:0 0 10px 0;font-size:14px;color:' + SEC + ';line-height:1.5;\">' + (a.resume_court || '') + '</p>'\n    + (mots.length ? '<div style=\"margin-bottom:8px;\">' + mots.map(badge).join('') + '</div>' : '')\n    + lien + '</div>';\n}\n\nconst parTheme = {};\nfor (const a of articles) {\n  const t = a.theme_principal || 'General';\n  if (!parTheme[t]) parTheme[t] = [];\n  parTheme[t].push(a);\n}\n\nlet contenu = '';\nfor (const [theme, arts] of Object.entries(parTheme)) {\n  contenu += '<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-bottom:24px;\">'\n    + '<tr><td style=\"border-left:4px solid ' + ACCENT + ';padding-left:12px;\">'\n    + '<p style=\"margin:0;font-size:18px;font-weight:bold;color:' + HEADER + ';\">' + theme + '</p>'\n    + '<p style=\"margin:2px 0 0 0;font-size:12px;color:' + SEC + ';\">' + arts.length + ' article' + (arts.length > 1 ? 's' : '') + '</p>'\n    + '</td></tr><tr><td style=\"padding-top:12px;\">' + arts.map(carteArticle).join('') + '</td></tr></table>';\n}\n\nconst pRaw = (abonne.periodicite || '').toLowerCase();\nconst periodiciteLabel = (pRaw === 'weekly' || pRaw === 'hebdomadaire') ? 'weekly' : (pRaw === 'monthly' || pRaw === 'mensuel') ? 'monthly' : 'daily';\nconst periodicitesujet = (pRaw === 'weekly' || pRaw === 'hebdomadaire') ? 'Weekly' : (pRaw === 'monthly' || pRaw === 'mensuel') ? 'Monthly' : 'Daily';\n\nconst html = '<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:' + FOND + ';font-family:Arial,Helvetica,sans-serif;\">'\n  + '<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td align=\"center\" style=\"padding:24px 16px;\">'\n  + '<table width=\"640\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:640px;width:100%;\">'\n  + '<tr><td style=\"background:' + HEADER + ';border-radius:10px 10px 0 0;padding:28px 32px;\">'\n  + '<p style=\"margin:0;font-size:13px;color:#aaaacc;text-transform:uppercase;letter-spacing:2px;\">Your Curated Briefing</p>'\n  + '<p style=\"margin:6px 0 4px 0;font-size:26px;font-weight:bold;color:#ffffff;\">Hello ' + abonne.prenom + ' 👋</p>'\n  + '<p style=\"margin:0;font-size:14px;color:#aaaacc;\">' + dateStr + ' &bull; ' + articles.length + ' article' + (articles.length > 1 ? 's' : '') + ' curated for you</p>'\n  + '</td></tr>'\n  + '<tr><td style=\"background:' + FOND + ';padding:24px 32px;\">' + contenu + '</td></tr>'\n  + '<tr><td style=\"background:#eeeeee;padding:12px 32px;border-top:1px solid #dddddd;\">'\n  + '<p style=\"margin:0;font-size:12px;color:' + SEC + ';\">You are receiving this digest <strong>' + periodiciteLabel + '</strong>.</p>'\n  + '</td></tr>'\n  + '<tr><td style=\"background:' + HEADER + ';border-radius:0 0 10px 10px;padding:20px 32px;\">'\n  + '<p style=\"margin:0;font-size:12px;color:#aaaacc;\">To customize your topics, change frequency, or unsubscribe,<br>reply to this email or write to <strong style=\"color:#ffffff;\">bot@example.com</strong> in plain English.<br><em>Examples: \"switch to weekly\" &bull; \"add AI topic\" &bull; \"unsubscribe\"</em></p>'\n  + '</td></tr>'\n  + '</table></td></tr></table></body></html>';\n\nconst sujet = '📰 News Digest (' + periodicitesujet + ') - ' + dateStr + ' - ' + articles.length + ' article' + (articles.length > 1 ? 's' : '');\n\nreturn [{ json: { sujet, html, abonne_id: abonne.id, article_ids: JSON.stringify(articles.map(a => a.id)) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "7a846a3b-2ef3-4ec2-8971-a8ca1719d9c2",
+      "name": "Construire HTML newsletter"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO newsletter_queue (abonne_id, sujet, html) \nVALUES ($1, $2, '{{ $('Construire HTML newsletter').item.json.html.replace(/'/g, \"''\") }}');",
+        "options": {
+          "queryReplacement": "={{ $json.abonne_id }}\n{{ $json.sujet }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        0
+      ],
+      "id": "ca85d49f-5c9c-42a7-a961-45ee4d79e7ca",
+      "name": "Insérer dans queue",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO newsletter_envois (abonne_id, article_id)\nSELECT {{ $('Construire HTML newsletter').item.json.abonne_id }}, unnest(ARRAY{{ $('Construire HTML newsletter').item.json.article_ids }}::int[])\nON CONFLICT DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{ $json.abonne_id }}\n{{ '{' + JSON.parse($json.article_ids).join(',') + '}' }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        0
+      ],
+      "id": "df681d22-2c85-4642-a006-2ea6dab82045",
+      "name": "Tracer envois",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        240
+      ],
+      "id": "2e44fb93-a298-4ec7-a80a-a6062af7ad8b",
+      "name": "Aucun article — skip"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Abonnés actifs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (6h)": {
+      "main": [
+        [
+          {
+            "node": "Abonnés actifs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Abonnés actifs": {
+      "main": [
+        [
+          {
+            "node": "Filtre périodicité",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtre périodicité": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Abonnés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Abonnés": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Articles éligibles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Articles éligibles": {
+      "main": [
+        [
+          {
+            "node": "Si articles trouvés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Si articles trouvés": {
+      "main": [
+        [
+          {
+            "node": "Construire HTML newsletter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aucun article — skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire HTML newsletter": {
+      "main": [
+        [
+          {
+            "node": "Insérer dans queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insérer dans queue": {
+      "main": [
+        [
+          {
+            "node": "Tracer envois",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tracer envois": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Abonnés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aucun article — skip": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Abonnés",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d55e567f-ee98-4cd2-a13e-8451f8ce5b3d",
+  "meta": {
+    "instanceId": "30ec8b1eda8a151582e85784af303a4c29cf021152bd2d826e291f3489a5ea97"
+  },
+  "id": "X3VUipD3iIvdfeDj",
+  "tags": []
+}

@@ -1,0 +1,904 @@
+{
+  "name": "Sub Collecte Newsletter",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -3552,
+        464
+      ],
+      "id": "b40a893b-de30-4f85-b168-b9c1d953e612",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 5,
+        "filters": {
+          "labelIds": [
+            "Label_5"
+          ],
+          "readStatus": "unread",
+          "sender": "={{ $json.config.sender }}"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -3312,
+        464
+      ],
+      "id": "4327dda5-307b-4663-878e-bf17d57cddb2",
+      "name": "Gmail Get Many",
+      "webhookId": "4bd6fca0-7d9c-4ba1-b830-188ed7bff44c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NYLD92Pb87pngTDm",
+          "name": "Gmail Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggerData = $('Execute Workflow Trigger').first().json;\nconst config = triggerData.config || {};\nconst prioritesSource = Array.isArray(config.priorites) ? config.priorites : [];\nconst exclusionsSource = Array.isArray(config.ignore) ? config.ignore : [];\n\nfunction analyzeText(text) {\n  if (exclusionsSource.some(k => text.includes(k.toLowerCase()))) {\n    return { category: 'exclu', priority: 'aucune', score: 0 };\n  }\n  if (prioritesSource.some(k => text.includes(k.toLowerCase()))) {\n    return { category: 'prioritaire', priority: 'important', score: 5 };\n  }\n  return { category: 'standard', priority: 'secondaire', score: 2 };\n}\n\nconst results = [];\nfor (const item of $input.all()) {\n  const text = ((item.json.Subject || '') + ' ' + (item.json.snippet || '')).toLowerCase();\n  const { category, priority, score } = analyzeText(text);\n  results.push({\n    gmailId: item.json.id,\n    threadId: item.json.threadId,\n    Subject: item.json.Subject,\n    snippet: item.json.snippet,\n    text, score,\n    shouldFetch: score >= 3,\n    priority, category,\n    profil: triggerData.profil_analyse\n  });\n}\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3072,
+        464
+      ],
+      "id": "3bf9a76a-3351-4455-a701-cd756ec53940",
+      "name": "score theme email"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "score-check",
+              "leftValue": "={{ $json.shouldFetch }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -2832,
+        464
+      ],
+      "id": "8c5ebaac-0dad-43dd-810f-0174838d7d77",
+      "name": "If score suffisant"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $json.gmailId }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2592,
+        624
+      ],
+      "id": "cba0a93e-b43c-44c1-a91b-3c0bb338b49a",
+      "name": "Mark Read (écarté)",
+      "webhookId": "30b9541a-bbee-4bc7-bc5e-e5ee414d0850",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NYLD92Pb87pngTDm",
+          "name": "Gmail Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -2592,
+        304
+      ],
+      "id": "4f39e58b-6531-4b0c-8298-d0736682f7d7",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.gmailId }}",
+        "simple": false,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -2352,
+        304
+      ],
+      "id": "98c22c0f-3965-48cb-b606-bc1ce9987de8",
+      "name": "Gmail Get message complet",
+      "webhookId": "df2ddc15-0416-437d-85ce-bc232f61e184",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NYLD92Pb87pngTDm",
+          "name": "Gmail Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const returnItems = [];\n\nfor (const item of $input.all()) {\n  const email = item.json;\n  const emailId = $('Loop Over Items').item.json.gmailId;\n  const emailBody = email.text || email.body || '';\n  const subject = email.Subject || email.subject || 'Article sans titre';\n\n  const titleRegex = /Article\\s*:\\s*([^\\n]+)/i;\n  const titleMatch = emailBody.match(titleRegex);\n  let extractedTitle = titleMatch ? titleMatch[1].trim() : subject;\n extractedTitle = extractedTitle\n    .replace(/&laquo;/g, '«').replace(/&raquo;/g, '»')\n    .replace(/&rsquo;/g, '\\u2019').replace(/&amp;/g, '&')\n    .replace(/&quot;/g, '\"').replace(/^re:\\s*/i, '').trim();\n\n  const urlLabelRegex = /URL\\s*:\\s*(https?:\\/\\/[^\\s\\r\\n\"\\]]+)/i;\n  const urlLabelMatch = emailBody.match(urlLabelRegex);\n  let extractedUrl = '';\n  if (urlLabelMatch) {\n    extractedUrl = urlLabelMatch[1].trim();\n  } else {\n    const genericUrlRegex = /(https?:\\/\\/[^\\s\\r\\n<>\"]+)/i;\n    const genericMatch = emailBody.match(genericUrlRegex);\n    extractedUrl = genericMatch ? genericMatch[1].trim() : 'aucune';\n  }\n  extractedUrl = extractedUrl.replace(/[\\)\\]\\.\\,]+$/, '');\n\n  returnItems.push({\n    json: {\n      email_id: emailId,\n      titre: extractedTitle,\n      url: extractedUrl\n    }\n  });\n}\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2112,
+        304
+      ],
+      "id": "e960e6c2-971e-422b-8e01-701968205e93",
+      "name": "recup url base article"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -1872,
+        304
+      ],
+      "id": "f68c5917-ccde-4c2f-963d-a27532c833de",
+      "name": "HTTP Request newsletter",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "contenu_propre",
+              "cssSelector": ".entry-content"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        -1632,
+        304
+      ],
+      "id": "24520efc-bf04-4189-bad6-6367dd4df7fc",
+      "name": "HTML extract newsletter",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const returnItems = [];\n\nfor (const item of $input.all()) {\n  // Fallback sur le corps de l'email si le scraping a échoué\n  const emailData = $('Gmail Get message complet').item.json;\n  let texte = item.json.contenu_propre \n    || emailData.text \n    || emailData.snippet \n    || '';\n\n  // Extraction des URLs\n  const urls = texte.match(/\\[(https?:\\/\\/[^\\]]+)\\]/g) || [];\n  const sources = [];\n  urls.forEach(urlStr => {\n    const url = urlStr.replace(/[\\[\\]]/g, '');\n    if (!url.includes('tpeactu.fr') && \n        !url.match(/\\.(jpg|jpeg|png|gif)$/i) && \n        !url.includes('wp.com')) {\n      sources.push(url);\n    }\n  });\n\n  texte = texte.split(/PARTAGER\\s*:/)[0];\n  texte = texte.replace(/\\[https?:\\/\\/[^\\]]+\\]/g, '');\n  texte = texte.replace(/^\\s*\\d+[–-]\\d+\\s*minutes/im, '');\n  texte = texte.replace(/^.*via canva\\.com.*$/im, '');\n  texte = texte.replace(/\\n\\s*\\n/g, '\\n\\n').trim();\n\n  returnItems.push({\n    json: {\n      ...item.json,\n      texte_propre: texte,\n      sources_externes: sources\n    }\n  });\n}\nreturn returnItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1392,
+        304
+      ],
+      "id": "10ace561-8a9e-4a0e-b3de-0b224b5f86d7",
+      "name": "search source externe",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "url-check",
+              "leftValue": "={{ $json.sources_externes[0] }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1152,
+        304
+      ],
+      "id": "90fcf55e-8c80-40e5-a4ca-b8e1c82bc054",
+      "name": "If URL externe"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.sources_externes[0] }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fr-FR,fr;q=0.9"
+            }
+          ]
+        },
+        "options": {
+          "redirect": {
+            "redirect": {}
+          },
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -912,
+        144
+      ],
+      "id": "73d7fc98-7df8-4952-89be-edd0d5cdb3a1",
+      "name": "HTTP Request article externe",
+      "retryOnFail": true,
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "texte_source",
+              "cssSelector": "article, [role=\"main\"], main, .post-content, .entry-content, #content"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        -672,
+        144
+      ],
+      "id": "87fb2063-6dd4-45dd-a10b-1a3187c6a8ff",
+      "name": "HTML extract article",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  if (item.json.texte_source) {\n    let texte = item.json.texte_source;\n    texte = texte.replace(/^[ \\t]+$/gm, '');\n    texte = texte.replace(/[ \\t]{2,}/g, ' ');\n    texte = texte.replace(/\\n{3,}/g, '\\n\\n');\n    texte = texte.trim();\n    item.json.texte_source_propre = texte;\n    const wordCount = texte.split(/\\s+/).length;\n    const isCookieOrError = /accepter les cookies|gérer mes choix|javascript est désactivé|panneau de gestion des cookies|veuillez patienter/i.test(texte);\n    let isValid = true;\n    let reason = 'Article valide';\n    if (wordCount < 150) {\n      isValid = false;\n      reason = `Texte trop court (${wordCount} mots).`;\n    } else if (isCookieOrError && wordCount < 300) {\n      isValid = false;\n      reason = 'Bannière de cookies ou mur anti-robot détecté.';\n    }\n    item.json.validation = { is_valid: isValid, word_count: wordCount, reason };\n  } else {\n    item.json.texte_source_propre = '';\n    item.json.validation = { is_valid: false, word_count: 0, reason: 'Aucun texte extrait.' };\n  }\n}\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -432,
+        144
+      ],
+      "id": "4f6806db-0b9c-4651-b007-aa5fe789dec4",
+      "name": "verif contenu article source",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.validation.is_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -192,
+        144
+      ],
+      "id": "b71eab15-ac54-423c-9228-ce14e2897259",
+      "name": "If contenu valide"
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggerData = $('Execute Workflow Trigger').first().json;\nconst emailInfo = $('recup url base article').item.json;\nconst out = [];\nfor (const item of $input.all()) {\n  out.push({ json: {\n    source_id: triggerData.id,\n    source_nom: triggerData.nom,\n    profil_analyse: triggerData.profil_analyse,\n    email_id: emailInfo.email_id,\n    url_source: $('search source externe').item.json.sources_externes[0] || 'aucune',\n    titre_brut: emailInfo.titre,\n    texte_brut: item.json.texte_source_propre || '',\n    origine_texte: 'article_externe'\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        64
+      ],
+      "id": "58ad2d3f-97cf-408b-9810-94ba950321a2",
+      "name": "préparer insert (article externe)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggerData = $('Execute Workflow Trigger').first().json;\nconst emailInfo = $('recup url base article').item.json;\nconst out = [];\nfor (const item of $input.all()) {\n  out.push({ json: {\n    source_id: triggerData.id,\n    source_nom: triggerData.nom,\n    profil_analyse: triggerData.profil_analyse,\n    email_id: emailInfo.email_id,\n    url_source: $('search source externe').item.json.sources_externes[0] || 'aucune',\n    titre_brut: emailInfo.titre,\n    texte_brut: $('search source externe').item.json.texte_propre || '',\n    origine_texte: 'newsletter_seule'\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        224
+      ],
+      "id": "4f5a669d-1e0f-4779-a755-ee3d6bccd541",
+      "name": "préparer insert (newsletter seule)"
+    },
+    {
+      "parameters": {
+        "jsCode": "const triggerData = $('Execute Workflow Trigger').first().json;\nconst emailInfo = $('recup url base article').item.json;\nconst out = [];\nfor (const item of $input.all()) {\n  out.push({ json: {\n    source_id: triggerData.id,\n    source_nom: triggerData.nom,\n    profil_analyse: triggerData.profil_analyse,\n    email_id: emailInfo.email_id,\n    url_source: emailInfo.url || 'aucune',\n    titre_brut: emailInfo.titre,\n    texte_brut: item.json.texte_propre || '',\n    origine_texte: 'lecture_directe'\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        384
+      ],
+      "id": "6d45b283-16d7-414f-9453-21e095835936",
+      "name": "préparer insert (lecture directe)"
+    },
+    {
+      "parameters": {
+        "operation": "markAsRead",
+        "messageId": "={{ $('recup url base article').item.json.email_id }}"
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        528,
+        224
+      ],
+      "id": "4a58054b-94c4-4801-b09e-2094256fd5ae",
+      "name": "Mark Read (traité)",
+      "webhookId": "0fc63deb-4bd0-46a1-a221-4f7a68942efa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NYLD92Pb87pngTDm",
+          "name": "Gmail Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "articles_veille",
+          "mode": "list",
+          "cachedResultName": "articles_veille"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "source_id": "={{ $json.source_id }}",
+            "source_nom": "={{ $json.source_nom }}",
+            "profil_analyse": "={{ $json.profil_analyse }}",
+            "email_id": "={{ $json.email_id }}",
+            "url_source": "={{ $json.url_source }}",
+            "titre_brut": "={{ $json.titre_brut }}",
+            "texte_brut": "={{ $json.texte_brut }}",
+            "origine_texte": "={{ $json.origine_texte }}",
+            "statut": "a_analyser"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "source_id",
+              "displayName": "source_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source_nom",
+              "displayName": "source_nom",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "profil_analyse",
+              "displayName": "profil_analyse",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email_id",
+              "displayName": "email_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "url_source",
+              "displayName": "url_source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titre_brut",
+              "displayName": "titre_brut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "texte_brut",
+              "displayName": "texte_brut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "origine_texte",
+              "displayName": "origine_texte",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "statut",
+              "displayName": "statut",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "theme_principal",
+              "displayName": "theme_principal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "public_cible",
+              "displayName": "public_cible",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "titre_article",
+              "displayName": "titre_article",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resume_court",
+              "displayName": "resume_court",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "resume_long",
+              "displayName": "resume_long",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "mots_cles",
+              "displayName": "mots_cles",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "object",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "erreur_detail",
+              "displayName": "erreur_detail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_collecte",
+              "displayName": "date_collecte",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "date_analyse",
+              "displayName": "date_analyse",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        320,
+        176
+      ],
+      "id": "bd03419c-e925-4954-bc7a-fdd976b02d2e",
+      "name": "Insert rows in a table",
+      "credentials": {
+        "postgres": {
+          "id": "SdzrRFFKTt0Eo5D2",
+          "name": "Postgres N8N"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Gmail Get Many",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Get Many": {
+      "main": [
+        [
+          {
+            "node": "score theme email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "score theme email": {
+      "main": [
+        [
+          {
+            "node": "If score suffisant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If score suffisant": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Read (écarté)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Gmail Get message complet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail Get message complet": {
+      "main": [
+        [
+          {
+            "node": "recup url base article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "recup url base article": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request newsletter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request newsletter": {
+      "main": [
+        [
+          {
+            "node": "HTML extract newsletter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML extract newsletter": {
+      "main": [
+        [
+          {
+            "node": "search source externe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search source externe": {
+      "main": [
+        [
+          {
+            "node": "If URL externe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If URL externe": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request article externe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "préparer insert (lecture directe)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request article externe": {
+      "main": [
+        [
+          {
+            "node": "HTML extract article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTML extract article": {
+      "main": [
+        [
+          {
+            "node": "verif contenu article source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "verif contenu article source": {
+      "main": [
+        [
+          {
+            "node": "If contenu valide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If contenu valide": {
+      "main": [
+        [
+          {
+            "node": "préparer insert (article externe)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "préparer insert (newsletter seule)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "préparer insert (article externe)": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "préparer insert (newsletter seule)": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "préparer insert (lecture directe)": {
+      "main": [
+        [
+          {
+            "node": "Insert rows in a table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Read (traité)": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert rows in a table": {
+      "main": [
+        [
+          {
+            "node": "Mark Read (traité)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "eca98a6a-ad3b-4409-b380-dad55f80cc68",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "30ec8b1eda8a151582e85784af303a4c29cf021152bd2d826e291f3489a5ea97"
+  },
+  "id": "4nSZoBhwSfNhPm0j",
+  "tags": []
+}

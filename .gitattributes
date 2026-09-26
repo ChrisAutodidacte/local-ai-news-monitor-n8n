@@ -1,0 +1,10 @@
+# Normalise les fins de ligne en LF pour tout le dépôt (évite le bruit CRLF/LF
+# entre Windows, macOS et Linux).
+* text=auto eol=lf
+
+# Fichiers binaires éventuels (captures d'écran) : pas de conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary

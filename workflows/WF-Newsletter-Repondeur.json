@@ -1,0 +1,164 @@
+{
+  "name": "WF-Newsletter-Repondeur",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        192
+      ],
+      "id": "5ed71bf0-3bb0-41c4-ac06-2cfd29b49580",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "10/15 * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "39264fc5-8809-4f57-bf77-5016b2327253",
+      "name": "Schedule Trigger (30 min décalé)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM newsletter_emails_commandes WHERE statut = 'a_envoyer';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        240,
+        96
+      ],
+      "id": "6366d411-0e1b-4b97-85a2-5bddf18e65f0",
+      "name": "Réponses à envoyer",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email_expediteur }}",
+        "subject": "={{ 'Re: ' + ($json.sujet_original || 'Votre demande newsletter') }}",
+        "message": "={{ '<p>' + ($json.reponse_texte || '').replace(/\\n/g, '</p><p>') + '</p>' }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        480,
+        96
+      ],
+      "id": "024227bc-3b15-4747-b6a2-623489bd3ecb",
+      "name": "Envoyer réponse",
+      "webhookId": "22a55e51-648f-4204-949d-26d45513a79c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NKNR07vKlE607HcR",
+          "name": "Gmail Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE newsletter_emails_commandes SET statut = 'traite', date_envoi_reponse = now() WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Réponses à envoyer').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        96
+      ],
+      "id": "f77f4c45-9dae-4c72-9e67-b96d831805ea",
+      "name": "Marquer traité",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Réponses à envoyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (30 min décalé)": {
+      "main": [
+        [
+          {
+            "node": "Réponses à envoyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Réponses à envoyer": {
+      "main": [
+        [
+          {
+            "node": "Envoyer réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Envoyer réponse": {
+      "main": [
+        [
+          {
+            "node": "Marquer traité",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "853c9c1c-d670-47ba-a473-c4cf6fa66bfe",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "30ec8b1eda8a151582e85784af303a4c29cf021152bd2d826e291f3489a5ea97"
+  },
+  "id": "YHhfrkUgHEY6vUvb",
+  "tags": []
+}

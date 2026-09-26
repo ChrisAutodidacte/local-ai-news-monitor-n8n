@@ -1,0 +1,164 @@
+{
+  "name": "WF-Newsletter-Sender",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        128,
+        272
+      ],
+      "id": "9bcba7e3-39e2-43fc-b596-4a4b420ca73f",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9,
+              "triggerAtMinute": 15
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        128,
+        80
+      ],
+      "id": "0aa5ed5b-457d-4989-a470-82e03419969d",
+      "name": "Schedule Trigger (6h15)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT q.id, q.sujet, q.html, a.email, a.prenom\nFROM newsletter_queue q\nJOIN newsletter_abonnes a ON a.id = q.abonne_id\nWHERE q.statut = 'a_envoyer'\nORDER BY q.date_creation;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        368,
+        160
+      ],
+      "id": "08e2f2cf-988f-4de9-8f13-444cd8702777",
+      "name": "Emails à envoyer",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE newsletter_queue SET statut = 'envoye', date_envoi = now() WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Emails à envoyer').item.json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        976,
+        144
+      ],
+      "id": "d58fdc70-adf2-490d-b5e8-14639ab6da23",
+      "name": "Marquer envoyé",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.sujet }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        576,
+        160
+      ],
+      "id": "55fd8e3c-867b-4bb5-965d-ebd8e1f60e32",
+      "name": "Send a message",
+      "webhookId": "71f633c0-e3e0-4999-bcb0-c17ed9577a3c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NKNR07vKlE607HcR",
+          "name": "Gmail Bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Emails à envoyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (6h15)": {
+      "main": [
+        [
+          {
+            "node": "Emails à envoyer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emails à envoyer": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Marquer envoyé",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "db3aab73-d802-4ae3-8dfb-a970793434fc",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "30ec8b1eda8a151582e85784af303a4c29cf021152bd2d826e291f3489a5ea97"
+  },
+  "id": "RdeiqLlG8gDpkGlp",
+  "tags": []
+}

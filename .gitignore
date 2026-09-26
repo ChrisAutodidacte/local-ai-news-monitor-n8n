@@ -1,0 +1,44 @@
+# =============================================================================
+#  .gitignore — protège les secrets et les données locales
+# =============================================================================
+
+# --- Secrets & configuration locale ------------------------------------------
+.env
+*.env
+!.env.example
+
+# --- Données runtime (jamais publiées) ---------------------------------------
+# Données n8n (contient les credentials chiffrés : Gmail, SMTP, API…)
+data/
+data_secours/
+.n8n/
+
+# Base de données PostgreSQL
+postgres_data/
+pgdata/
+
+# Modèles et cache Ollama
+ollama_data/
+
+# Clés SSH éventuelles
+ssh-n8n/
+**/.ssh/
+*.pem
+id_rsa*
+
+# SearXNG : on versionne settings.yml mais pas les fichiers générés au runtime
+searxng/uwsgi.ini
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- Système / éditeurs ------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/

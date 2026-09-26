@@ -1,0 +1,777 @@
+{
+  "name": "WF-Newsletter-Processeur",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2448,
+        256
+      ],
+      "id": "f53bc189-2aca-4008-83d5-69ba0d8e9c88",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "5/15 * * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2448,
+        64
+      ],
+      "id": "e6da66b6-8f35-4e0b-b39e-bc19b3265a7d",
+      "name": "Schedule Trigger (30 min)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM newsletter_emails_commandes WHERE statut = 'recu' LIMIT 10;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -2208,
+        160
+      ],
+      "id": "f391bd85-f4f8-4960-b388-96f367c2af59",
+      "name": "Emails à traiter",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1984,
+        96
+      ],
+      "id": "ff3629c0-8554-45fd-acfa-37343a6dc610",
+      "name": "Loop Over Emails"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE newsletter_emails_commandes SET statut = 'en_traitement' WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $json.id }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1728,
+        64
+      ],
+      "id": "4b5dc2be-4d43-46a6-a133-05b9d548fd92",
+      "name": "Marquer en traitement",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT string_agg(nom, ', ' ORDER BY ordre, nom) AS themes_liste \nFROM newsletter_themes \nWHERE nom != 'Autre';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1536,
+        -112
+      ],
+      "id": "4bfef834-bf8e-4857-bd60-9b56f81dbb49",
+      "name": "Thèmes disponibles",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT prenom, themes, periodicite FROM newsletter_abonnes WHERE email = $1 LIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ $('Loop Over Emails').item.json.email_expediteur}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -1312,
+        -176
+      ],
+      "id": "998d54c9-5498-49f9-bcac-0776ebd5e7f1",
+      "name": "État abonné existant",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Loop Over Emails').item.json;\nconst themes = $('Thèmes disponibles').all().map(i => i.json.theme).join(', ');\nconst abonneData = $('État abonné existant').all();\nconst etatAbonne = abonneData.length > 0 ? JSON.stringify(abonneData[0].json) : 'non inscrit';\n\nconst prompt = `Tu es l'assistant automatique de gestion d'abonnements de la newsletter \"Veille TPE\".\nTu reçois un email et tu dois déterminer ce que l'expéditeur souhaite faire.\n\nEmail reçu de : ${email.email_expediteur}\n---\n${email.corps_original}\n---\n\nThèmes disponibles : ${themes}\n\nÉtat actuel de cet abonné : ${etatAbonne}\n\nDétermine :\n1. L'action demandée parmi : inscription | desinscription | modification | suggestion_theme | incompris\n2. Si inscription ou modification : les thèmes choisis (utilise EXACTEMENT les noms de la liste) et la périodicité (quotidien | hebdomadaire | mensuel)\n3. Un texte de réponse en français, ton amical et professionnel, qui :\n   - Précise que tu es un assistant automatisé\n   - Confirme ce qui a été fait (si action claire)\n   - Pour suggestion_theme : indique que la demande est transmise à l'administrateur\n   - Pour incompris : explique ce que tu n'as pas compris et donne ces 4 exemples :\n     * \"Je souhaite m'abonner aux thèmes Finances et Légal, en hebdomadaire\"\n     * \"Je veux me désabonner de la newsletter\"\n     * \"Ajoute le thème Ressources humaines à mes préférences\"\n     * \"Je voudrais recevoir la newsletter tous les mois\"\n\nRéponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après :\n{\"action\": \"...\", \"themes\": [], \"periodicite\": \"...\", \"reponse_texte\": \"...\"}`;\n\nreturn [{ json: { prompt, commande_id: email.id, email_expediteur: email.email_expediteur, sujet_original: email.sujet_original } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1520,
+        -608
+      ],
+      "id": "815b354b-6ffe-40c5-a57e-9b2ae70f074d",
+      "name": "Préparer prompt"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gemma3:4b",
+          "mode": "list",
+          "cachedResultName": "gemma3:4b"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are the automated subscription manager for the News Monitor newsletter.\nThis sender is ALREADY SUBSCRIBED.\n\nEmail received from: {{ $('Emails à traiter').item.json.email_expediteur }}\n---\n{{ $('Emails à traiter').item.json.corps_original }}\n---\n\nCurrent Subscription:\n- Topics: {{ $('État abonné existant').first().json.themes.join(', ') }}\n- Frequency: {{ $('État abonné existant').first().json.periodicite }}\n\nRULES:\n- If sender wants to adjust topics or change frequency -> action = \"modification\"\n- If sender wants to completely stop receiving emails / unsubscribe -> action = \"desinscription\"\n- If unclear or unrelated -> action = \"incompris\"\n- Provide NO explanation. Output pure JSON only.\n\nRespond ONLY with a valid JSON object:\n{\"action\": \"...\"}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1,
+          "format": "json"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        -864,
+        -368
+      ],
+      "id": "963161a2-4f2d-478a-9d76-e8197be534d9",
+      "name": "Ollama Interprétation",
+      "credentials": {
+        "ollamaApi": {
+          "id": "WUyER1YREMbuAG9X",
+          "name": "Ollama account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = ($json.content || $json.message?.content || '')\n  .replace(/```json/ig, '')\n  .replace(/```/g, '')\n  .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch(e) {\n  return [{ json: { \n    _parse_error: true, \n    raw,\n    commande_id: $('Emails à traiter').item.json.id, \n    email_expediteur: $('Emails à traiter').item.json.email_expediteur \n  } }];\n}\n\nconst themes = $('Thèmes disponibles').first().json.themes_liste;\nconst action = parsed.action || 'incompris';\nconst prenom = $('État abonné existant').first().json.prenom || '';\nconst salutation = prenom ? `Bonjour ${prenom}` : 'Bonjour';\n\nconst reponses = {\n  inscription: `Bonjour\\n\\nVotre inscription à la newsletter Veille TPE est confirmée. Vous recevrez quotidiennement nos actualités sur les thèmes suivants : ${themes}.\\n\\nSi vous souhaitez recevoir uniquement certains de ces thèmes, répondez simplement à cet email en nous indiquant lesquels.\\n\\nCordialement,\\nL équipe Veille TPE`,\n  desinscription: `${salutation},\\n\\nVotre désinscription de la newsletter Veille TPE a bien été prise en compte.\\n\\nCordialement,\\nL équipe Veille TPE`,\n modification: `${salutation},\\n\\nNous avons bien reçu votre demande de modification. Votre demande a été transmise à notre administrateur qui mettra à jour vos préférences dans les plus brefs délais.\\n\\nCordialement,\\nL equipe Veille TPE`,\n  incompris: `${salutation},\\n\\nNous n avons pas bien compris votre demande. Voici quelques exemples :\\n- \"Je souhaite m abonner aux thèmes Finances et Légal, en hebdomadaire\"\\n- \"Je veux me désabonner de la newsletter\"\\n- \"Passe ma newsletter en mensuel\"\\n\\nCordialement,\\nL équipe Veille TPE`\n};\n\nconst escape = (str) => str.replace(/'/g, \"''\");\n\nreturn [{ json: {\n  action,\n  themes:           [],\n  periodicite:      'quotidien',\n  reponse_texte:    escape(reponses[action] || reponses.incompris),\n  commande_id:      $('Emails à traiter').item.json.id,\n  email_expediteur: $('Emails à traiter').item.json.email_expediteur,\n  sujet_original:   $('Emails à traiter').item.json.sujet_original\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        -128
+      ],
+      "id": "0c797138-44c9-45af-bd3d-063ba78560c7",
+      "name": "Parser réponse Ollama"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cond-inscription",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "inscription",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "inscription"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cond-desinscription",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "desinscription",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "desinscription"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cond-modification",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "modification",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "modification"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cond-suggestion",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "suggestion_theme",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "suggestion_theme"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -352,
+        -16
+      ],
+      "id": "55968de6-aaa9-4e77-8b97-fc2eea4b1d2b",
+      "name": "Router action"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO newsletter_abonnes (prenom, email, themes, periodicite, actif)\nVALUES (\n  split_part($1, '@', 1),\n  $1,\n  (SELECT array_agg(nom) FROM newsletter_themes WHERE nom != 'Autre'),\n  $2,\n  true\n)\nON CONFLICT (email) DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{$json.email_expediteur}}\n{{$json.periodicite}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -48,
+        -144
+      ],
+      "id": "1a5443c2-4f26-4b09-a826-515e9e9977d0",
+      "name": "BDD Inscription",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE newsletter_abonnes SET actif = false, date_modification = now() WHERE email = $1;",
+        "options": {
+          "queryReplacement": "={{ $json.email_expediteur }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -48,
+        32
+      ],
+      "id": "5b37a3bf-b7ac-4749-abc7-ca98498cc65f",
+      "name": "BDD Désinscription",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE newsletter_emails_commandes\nSET statut = 'a_envoyer',\n    action_detectee = $2,\n    reponse_texte = '{{ $('Parser réponse Ollama').item.json.reponse_texte }}',\n    date_traitement = now()\nWHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Parser réponse Ollama').item.json.commande_id }}\n{{ $('Parser réponse Ollama').item.json.action }}\n"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        304,
+        160
+      ],
+      "id": "f6bc446b-c1b7-4563-a305-2a8002fd08e3",
+      "name": "Préparer réponse",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE newsletter_emails_commandes SET statut = 'erreur', erreur_detail = $2, date_traitement = now() WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Préparer prompt').item.json.commande_id }}, {{ ($json.error?.message || 'Erreur Ollama ou parsing JSON').slice(0,500) }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -528,
+        224
+      ],
+      "id": "0037f4fe-9fca-4788-ae37-7b3b40ab3303",
+      "name": "Marquer erreur",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a9553bde-809d-444b-beda-785e4ae84885",
+              "leftValue": "={{ Object.keys($('État abonné existant').first().json).length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -1088,
+        -288
+      ],
+      "id": "8184a4b8-254b-4845-87e5-a623e86e32c6",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "qwen2.5:1.5b",
+          "mode": "list",
+          "cachedResultName": "qwen2.5:1.5b"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are the automated subscription manager for the News Monitor newsletter.\nThis sender wants to SUBSCRIBE.\n\nEmail received from: {{ $('Emails à traiter').item.json.email_expediteur }}\n---\n{{ $('Emails à traiter').item.json.corps_original }}\n---\n\nYour sole mission: Determine whether this is a subscription request or not.\n\nRULES:\n- If this is a subscription request -> action = \"inscription\"\n- Otherwise -> action = \"incompris\"\n- Provide NO explanation. Output pure JSON only.\n\nRespond ONLY with a valid JSON object:\n{\"action\": \"...\"}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.1,
+          "format": "json"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.ollama",
+      "typeVersion": 1,
+      "position": [
+        -912,
+        -96
+      ],
+      "id": "b208f5e7-77df-49de-9bbf-e8deaf406afb",
+      "name": "Ollama Interprétation1",
+      "credentials": {
+        "ollamaApi": {
+          "id": "WUyER1YREMbuAG9X",
+          "name": "Ollama account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const email = $('Loop Over Emails').item.json;\nconst themes = $('Thèmes disponibles').all().map(i => i.json.theme).join(', ');\nconst abonneData = $('État abonné existant').all();\nconst etatAbonne = abonneData.length > 0 ? JSON.stringify(abonneData[0].json) : 'non inscrit';\n\nconst prompt = `Tu es l'assistant automatique de gestion d'abonnements de la newsletter \"Veille TPE\".\nTu reçois un email et tu dois déterminer ce que l'expéditeur souhaite faire.\n\nEmail reçu de : ${email.email_expediteur}\n---\n${email.corps_original}\n---\n\nThèmes disponibles : ${themes}\n\nÉtat actuel de cet abonné : ${etatAbonne}\n\nDétermine :\n1. L'action demandée parmi : inscription | desinscription | modification | suggestion_theme | incompris\n2. Si inscription ou modification : les thèmes choisis (utilise EXACTEMENT les noms de la liste) et la périodicité (quotidien | hebdomadaire | mensuel)\n3. Un texte de réponse en français, ton amical et professionnel, qui :\n   - Précise que tu es un assistant automatisé\n   - Confirme ce qui a été fait (si action claire)\n   - Pour suggestion_theme : indique que la demande est transmise à l'administrateur\n   - Pour incompris : explique ce que tu n'as pas compris et donne ces 4 exemples :\n     * \"Je souhaite m'abonner aux thèmes Finances et Légal, en hebdomadaire\"\n     * \"Je veux me désabonner de la newsletter\"\n     * \"Ajoute le thème Ressources humaines à mes préférences\"\n     * \"Je voudrais recevoir la newsletter tous les mois\"\n\nRéponds UNIQUEMENT avec un objet JSON valide, sans texte avant ou après :\n{\"action\": \"...\", \"themes\": [], \"periodicite\": \"...\", \"reponse_texte\": \"...\"}`;\n\nreturn [{ json: { prompt, commande_id: email.id, email_expediteur: email.email_expediteur, sujet_original: email.sujet_original } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1536,
+        -448
+      ],
+      "id": "145c2c82-754e-4b20-a298-69f9f5b6171a",
+      "name": "Préparer prompt nouveau lecteur"
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "={{ 'Modification abonné — ' + $json.email_expediteur }}",
+        "message": "={{ 'Demande de modification de ' + $json.email_expediteur + ' :\\n\\n' + $('Emails à traiter').item.json.corps_original }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -32,
+        224
+      ],
+      "id": "b469eb18-432b-4d37-aedf-3a83e7c81c21",
+      "name": "Send a message",
+      "webhookId": "f4827fa9-1ade-4f93-91af-66b6de2bb6aa",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NKNR07vKlE607HcR",
+          "name": "Gmail Bot"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Emails à traiter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (30 min)": {
+      "main": [
+        [
+          {
+            "node": "Emails à traiter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emails à traiter": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Emails": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Marquer en traitement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marquer en traitement": {
+      "main": [
+        [
+          {
+            "node": "Thèmes disponibles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Thèmes disponibles": {
+      "main": [
+        [
+          {
+            "node": "État abonné existant",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "État abonné existant": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer prompt": {
+      "main": [
+        []
+      ]
+    },
+    "Ollama Interprétation": {
+      "main": [
+        [
+          {
+            "node": "Parser réponse Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marquer erreur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser réponse Ollama": {
+      "main": [
+        [
+          {
+            "node": "Router action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Router action": {
+      "main": [
+        [
+          {
+            "node": "BDD Inscription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "BDD Désinscription",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BDD Inscription": {
+      "main": [
+        [
+          {
+            "node": "Préparer réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BDD Désinscription": {
+      "main": [
+        [
+          {
+            "node": "Préparer réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer réponse": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marquer erreur": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Ollama Interprétation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ollama Interprétation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Interprétation1": {
+      "main": [
+        [
+          {
+            "node": "Parser réponse Ollama",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marquer erreur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer prompt nouveau lecteur": {
+      "main": [
+        []
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Préparer réponse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "22a6675f-e8e1-4469-845a-c387d73e9ef3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "30ec8b1eda8a151582e85784af303a4c29cf021152bd2d826e291f3489a5ea97"
+  },
+  "id": "oHLe1FjXdz2QMvL4",
+  "tags": []
+}

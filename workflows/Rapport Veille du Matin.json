@@ -1,0 +1,153 @@
+{
+  "name": "Rapport Veille du Matin",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        48,
+        272
+      ],
+      "id": "40e127ff-ff33-4e13-8059-b7a97a8ca385",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {
+        "jsCode": "const s = $('Stats admin').first().json;\n\nconst dateStr = new Date().toLocaleDateString('en-US', {\n  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'\n});\n\nconst HEADER = '#1a1a2e';\nconst ACCENT = '#457b9d';\nconst VERT   = '#2d6a4f';\nconst ROUGE  = '#c1121f';\nconst GRIS   = '#f8f9fa';\n\nfunction ligne(label, valeur, couleur) {\n  return `<tr>\n    <td style=\"padding:8px 12px;font-size:14px;color:#444;border-bottom:1px solid #eee;\">${label}</td>\n    <td style=\"padding:8px 12px;font-size:16px;font-weight:bold;color:${couleur || '#222'};text-align:right;border-bottom:1px solid #eee;\">${valeur}</td>\n  </tr>`;\n}\n\nfunction section(titre, lignes) {\n  return `\n  <p style=\"margin:20px 0 6px 0;font-size:13px;font-weight:bold;color:${ACCENT};text-transform:uppercase;letter-spacing:1px;\">${titre}</p>\n  <table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"border:1px solid #e0e0e0;border-radius:6px;background:#fff;\">\n    ${lignes}\n  </table>`;\n}\n\nconst html = `<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:${GRIS};font-family:Arial,sans-serif;\">\n<table width=\"100%\" cellpadding=\"0\" cellspacing=\"0\"><tr><td align=\"center\" style=\"padding:24px 16px;\">\n<table width=\"560\" cellpadding=\"0\" cellspacing=\"0\" style=\"max-width:560px;width:100%;\">\n\n  <tr><td style=\"background:${HEADER};border-radius:10px 10px 0 0;padding:24px 28px;\">\n    <p style=\"margin:0;font-size:12px;color:#aaaacc;text-transform:uppercase;letter-spacing:2px;\">Admin Intelligence Digest</p>\n    <p style=\"margin:6px 0 0 0;font-size:22px;font-weight:bold;color:#fff;\">🛠 News Monitor &mdash; ${dateStr}</p>\n  </td></tr>\n\n  <tr><td style=\"background:${GRIS};padding:16px 28px;\">\n    ${section('Articles (Past 24h)',\n      ligne('Total Collected',      s.articles_total,      ACCENT) +\n      ligne('Successfully Analyzed',s.articles_analyses,   VERT)   +\n      ligne('Pending Analysis',     s.articles_en_attente,'#888') +\n      ligne('Analysis Errors',      s.articles_erreurs,    s.articles_erreurs > 0 ? ROUGE : '#888')\n    )}\n    ${section('Newsletter Subscribers',\n      ligne('Active Subscribers',   s.abonnes_actifs,      ACCENT) +\n      ligne('New Today',            s.nouveaux_abonnes,    s.nouveaux_abonnes > 0 ? VERT : '#888') +\n      ligne('Unsubscribes',         s.desabonnements,      s.desabonnements > 0 ? ROUGE : '#888')\n    )}\n    ${section('Newsletter Dispatches (Past 24h)',\n      ligne('Newsletters Sent',     s.newsletters_envoyees, VERT) +\n      ligne('Delivery Errors',      s.newsletters_erreurs,  s.newsletters_erreurs > 0 ? ROUGE : '#888')\n    )}\n    ${section('Email Bot Commands (Past 24h)',\n      ligne('Commands Handled',     s.commandes_traitees,  VERT) +\n      ligne('Ollama Parser Errors', s.commandes_erreurs,   s.commandes_erreurs > 0 ? ROUGE : '#888')\n    )}\n  </td></tr>\n\n  <tr><td style=\"background:${HEADER};border-radius:0 0 10px 10px;padding:14px 28px;\">\n    <p style=\"margin:0;font-size:11px;color:#666688;\">Admin: http://localhost:8090 &nbsp;&bull;&nbsp; n8n: http://localhost:5678</p>\n  </td></tr>\n\n</table></td></tr></table>\n</body></html>`;\n\nconst alertes = [];\nif (s.articles_erreurs > 0)      alertes.push(`${s.articles_erreurs} article errors`);\nif (s.newsletters_erreurs > 0)   alertes.push(`${s.newsletters_erreurs} dispatch errors`);\nif (s.commandes_erreurs > 0)     alertes.push(`${s.commandes_erreurs} parser errors`);\n\nconst sujet = alertes.length > 0\n  ? `⚠️ News Monitor ${dateStr} — ${alertes.join(', ')}`\n  : `✅ News Monitor ${dateStr} — ${s.articles_analyses} articles · ${s.abonnes_actifs} subscribers`;\n\nreturn [{ json: { sujet, html } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        576,
+        128
+      ],
+      "id": "59820289-1b55-4e7a-9a80-3448224f2bcf",
+      "name": "Construire email"
+    },
+    {
+      "parameters": {
+        "sendTo": "your-email@example.com",
+        "subject": "={{ $json.sujet }}",
+        "message": "={{ $json.html }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        144
+      ],
+      "id": "00bfbc2f-35cf-47fe-8498-8e6e8347c881",
+      "name": "Gmail Send rapport",
+      "webhookId": "ed49f69f-b6d0-4a58-9d63-2c7be3b122d7",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "NYLD92Pb87pngTDm",
+          "name": "Gmail Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        48,
+        64
+      ],
+      "id": "3e22fa45-93a7-4673-bff3-c8eff8a7c9a0",
+      "name": "Schedule Trigger (9h)"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  -- Articles\n  COUNT(*) FILTER (WHERE av.statut = 'analyse'    AND av.date_collecte > now() - interval '24h') AS articles_analyses,\n  COUNT(*) FILTER (WHERE av.statut = 'erreur'     AND av.date_collecte > now() - interval '24h') AS articles_erreurs,\n  COUNT(*) FILTER (WHERE av.statut = 'a_analyser' AND av.date_collecte > now() - interval '24h') AS articles_en_attente,\n  COUNT(*) FILTER (WHERE av.date_collecte > now() - interval '24h')                               AS articles_total,\n  -- Abonnés\n  (SELECT COUNT(*) FROM newsletter_abonnes WHERE actif = true)                                    AS abonnes_actifs,\n  (SELECT COUNT(*) FROM newsletter_abonnes WHERE date_inscription > now() - interval '24h')       AS nouveaux_abonnes,\n  (SELECT COUNT(*) FROM newsletter_abonnes WHERE actif = false AND date_modification > now() - interval '24h') AS desabonnements,\n  -- Newsletter\n  (SELECT COUNT(*) FROM newsletter_queue WHERE statut = 'envoye' AND date_envoi > now() - interval '24h')     AS newsletters_envoyees,\n  (SELECT COUNT(*) FROM newsletter_queue WHERE statut = 'erreur' AND date_creation > now() - interval '24h')  AS newsletters_erreurs,\n  -- Commandes email\n  (SELECT COUNT(*) FROM newsletter_emails_commandes WHERE statut = 'traite' AND date_reception > now() - interval '24h') AS commandes_traitees,\n  (SELECT COUNT(*) FROM newsletter_emails_commandes WHERE statut = 'erreur' AND date_reception > now() - interval '24h') AS commandes_erreurs\nFROM articles_veille av;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        304,
+        128
+      ],
+      "id": "4d0567c3-cd15-43b5-bec3-7e6bf90cc2d3",
+      "name": "Stats admin",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Stats admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Construire email": {
+      "main": [
+        [
+          {
+            "node": "Gmail Send rapport",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger (9h)": {
+      "main": [
+        [
+          {
+            "node": "Stats admin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Stats admin": {
+      "main": [
+        [
+          {
+            "node": "Construire email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ddd05baf-88bd-44ef-a7ff-5a4b9246819c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "30ec8b1eda8a151582e85784af303a4c29cf021152bd2d826e291f3489a5ea97"
+  },
+  "id": "oVyRV5n4B1jNsrM3",
+  "tags": []
+}

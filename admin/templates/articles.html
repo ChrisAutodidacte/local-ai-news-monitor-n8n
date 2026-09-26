@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+{% block title %}Articles — News Monitor Admin{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-newspaper"></i> Collected Articles</h4>
+
+<!-- Filters -->
+<div class="card p-3 mb-4">
+  <form method="get" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small fw-semibold">Status</label>
+      <select name="statut" class="form-select form-select-sm">
+        <option value="">All</option>
+        <option value="a_analyser"  {{ 'selected' if statut == 'a_analyser' }}>Pending</option>
+        <option value="analyse"     {{ 'selected' if statut == 'analyse' }}>Analyzed</option>
+        <option value="erreur"      {{ 'selected' if statut == 'erreur' }}>Error</option>
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small fw-semibold">Source</label>
+      <select name="source_id" class="form-select form-select-sm">
+        <option value="">All</option>
+        {% for s in sources %}
+        <option value="{{ s.id }}" {{ 'selected' if source_id == s.id|string }}>{{ s.nom }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <label class="form-label small fw-semibold">Search</label>
+      <input type="text" name="search" class="form-control form-control-sm"
+             value="{{ search }}" placeholder="Title, summary, keywords…">
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm w-100">Filter</button>
+      <a href="/articles" class="btn btn-outline-secondary btn-sm">✕</a>
+    </div>
+  </form>
+</div>
+
+<!-- Results -->
+<div class="card">
+  <div class="card-header bg-white d-flex justify-content-between align-items-center">
+    <span class="fw-semibold">{{ total }} article{{ 's' if total != 1 }}</span>
+    <small class="text-muted">Page {{ page }}/{{ total_pages }}</small>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Title</th>
+          <th>Source</th>
+          <th>Topic</th>
+          <th>Status</th>
+          <th>Date</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in articles %}
+        <tr onclick="location.href='/articles/{{ a.id }}'">
+          <td>
+            <div class="fw-semibold">{{ (a.titre_article or a.titre_brut or '—')[:80] }}</div>
+            {% if a.resume_court %}
+            <small class="text-muted">{{ a.resume_court[:100] }}…</small>
+            {% endif %}
+          </td>
+          <td><small>{{ a.source_nom or '—' }}</small></td>
+          <td><small class="text-muted">{{ a.theme_principal or '—' }}</small></td>
+          <td><span class="badge badge-{{ a.statut }}">{{ a.statut }}</span></td>
+          <td><small>{{ a.date_collecte.strftime('%Y-%m-%d %H:%M') if a.date_collecte else '—' }}</small></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">No articles found</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <div class="card-footer bg-white">
+    <nav>
+      <ul class="pagination pagination-sm mb-0 justify-content-center">
+        {% if page > 1 %}
+        <li class="page-item">
+          <a class="page-link" href="?statut={{ statut }}&source_id={{ source_id }}&search={{ search }}&page={{ page - 1 }}">‹</a>
+        </li>
+        {% endif %}
+        {% for p in range([1, page-2]|max, [total_pages+1, page+3]|min) %}
+        <li class="page-item {{ 'active' if p == page }}">
+          <a class="page-link" href="?statut={{ statut }}&source_id={{ source_id }}&search={{ search }}&page={{ p }}">{{ p }}</a>
+        </li>
+        {% endfor %}
+        {% if page < total_pages %}
+        <li class="page-item">
+          <a class="page-link" href="?statut={{ statut }}&source_id={{ source_id }}&search={{ search }}&page={{ page + 1 }}">›</a>
+        </li>
+        {% endif %}
+      </ul>
+    </nav>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

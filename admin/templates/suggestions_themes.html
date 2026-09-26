@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Topic Suggestions — News Monitor Admin{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-4">
+  <h4 class="mb-0">Subscriber Topic Suggestions</h4>
+</div>
+
+{% if not suggestions %}
+  <p class="text-muted">No topic suggestions yet.</p>
+{% else %}
+<div class="card">
+  <table class="table table-hover mb-0">
+    <thead class="table-light">
+      <tr>
+        <th>Suggested Topic</th>
+        <th>Requested By</th>
+        <th>Date</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for s in suggestions %}
+    <tr>
+      <td class="fw-semibold">{{ s.theme_suggere }}</td>
+      <td>{{ s.demandeur_email or '—' }}</td>
+      <td>{{ s.date_suggestion.strftime('%Y-%m-%d') if s.date_suggestion else '—' }}</td>
+      <td>
+        {% if s.statut == 'en_attente' %}
+          <span class="badge bg-warning text-dark">Pending</span>
+        {% elif s.statut == 'accepte' %}
+          <span class="badge bg-success">Accepted</span>
+        {% else %}
+          <span class="badge bg-secondary">Rejected</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if s.statut == 'en_attente' %}
+        <form method="post" action="/suggestions-themes/{{ s.id }}/statut" class="d-inline">
+          <input type="hidden" name="statut" value="accepte">
+          <button class="btn btn-sm btn-success">
+            <i class="bi bi-check-lg"></i> Accept
+          </button>
+        </form>
+        <form method="post" action="/suggestions-themes/{{ s.id }}/statut" class="d-inline">
+          <input type="hidden" name="statut" value="refuse">
+          <button class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-x-lg"></i> Reject
+          </button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="text-muted small mt-3">
+  <i class="bi bi-info-circle"></i>
+  To activate an accepted topic: click Accept, then go to <a href="/sources">Sources</a> to tag matching sources with this topic.
+</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,589 @@
+{
+  "name": "Sub Collecte Web",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -640,
+        320
+      ],
+      "id": "a14092a8-aa7a-4f15-934b-e10f25fa71a0",
+      "name": "Execute Workflow Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "type-check",
+              "leftValue": "={{ $json.type_source }}",
+              "rightValue": "search",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -176,
+        320
+      ],
+      "id": "2a7711bd-501b-4c7a-b2a4-ff1b27febed7",
+      "name": "est une recherche ?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $('Execute Workflow Trigger').first().json;\nconst max = Number(trigger.config?.max) || 5;\nconst results = ($json.results || [])\n  .filter(r => r.url)\n  .sort((a, b) => (b.score || 0) - (a.score || 0));\nconst out = [];\nfor (const r of results.slice(0, max * 3)) {\n  out.push({ json: {\n    url: r.url,\n    titre: r.title || '',\n    source_id: trigger.id,\n    source_nom: trigger.nom,\n    profil_analyse: trigger.profil_analyse,\n    origine_texte: 'recherche_web',\n    max\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        304,
+        160
+      ],
+      "id": "b37cd1fb-1e13-497f-9cd0-a58f702436a3",
+      "name": "normaliser Brave"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.config.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        64,
+        480
+      ],
+      "id": "9249eccb-ea00-4720-9f59-ecfe23f07f24",
+      "name": "Lire index",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "hrefs",
+              "cssSelector": "a",
+              "returnValue": "attribute",
+              "attribute": "href",
+              "returnArray": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        304,
+        480
+      ],
+      "id": "3884f0e0-9734-4334-9b23-941d3ab71ad8",
+      "name": "Extraire liens",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const trigger = $('Execute Workflow Trigger').first().json;\nconst base = trigger.config?.url;\nconst motif = trigger.config?.motif_url || '';\nconst max = Number(trigger.config?.max) || 5;\nconst hrefs = $json.hrefs || [];\n\nconst seen = new Set();\nconst out = [];\nfor (const href of hrefs) {\n  if (!href || !String(href).includes(motif)) continue;\n  let abs;\n  try { abs = new URL(href, base).href; } catch { continue; }\n  abs = abs.split('#')[0];\n  if (seen.has(abs)) continue;\n  seen.add(abs);\n  out.push({ json: {\n    url: abs,\n    titre: '',\n    source_id: trigger.id,\n    source_nom: trigger.nom,\n    profil_analyse: trigger.profil_analyse,\n    origine_texte: 'veille_site',\n    max\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        544,
+        480
+      ],
+      "id": "307a5a4a-5985-4f13-aead-1c41ea1be6c9",
+      "name": "filtrer liens par motif"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        784,
+        320
+      ],
+      "id": "fcb56278-91e2-40f1-8c7c-f038cada87e7",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const urls = $input.all().map(i => i.json.url);\nconst pgArray = '{' + urls.map(u => '\"' + u.replace(/\\\\/g, '\\\\\\\\').replace(/\"/g, '\\\\\"') + '\"').join(',') + '}';\nreturn [{ json: { urls: pgArray } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        320
+      ],
+      "id": "adb66b42-8472-4a19-b5a3-e56efcbe5bcc",
+      "name": "collecter URLs"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT url_source FROM articles_veille \nWHERE url_source = ANY(string_to_array($1, E'\\n'));",
+        "options": {
+          "queryReplacement": "={{ $json.urls }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1264,
+        320
+      ],
+      "id": "8c21ffe5-2df6-4396-b5c6-f008303aa383",
+      "name": "URLs déjà vues",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const dejaVus = new Set($('URLs déjà vues').all().map(i => i.json.url_source));\nconst candidats = $('Merge').all().map(i => i.json);\nconst max = candidats[0]?.max || 5;\nconst out = [];\nfor (const c of candidats) {\n  if (dejaVus.has(c.url)) continue;\n  out.push({ json: c });\n  if (out.length >= max) break;\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        320
+      ],
+      "id": "204d0ebe-1a8a-4c53-8e9b-e94d2ee06c8d",
+      "name": "ne garder que les nouvelles"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1744,
+        320
+      ],
+      "id": "2917cc3b-ff07-4371-b442-1147f4811cf7",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+            },
+            {
+              "name": "Accept",
+              "value": "text/html,application/xhtml+xml"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1984,
+        320
+      ],
+      "id": "fbfd999e-84d3-48de-b49b-c126f6517ebc",
+      "name": "Scraper article",
+      "retryOnFail": true,
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "operation": "extractHtmlContent",
+        "extractionValues": {
+          "values": [
+            {
+              "key": "texte_source",
+              "cssSelector": "[role=\"main\"], main, .rich-text_blog, .w-richtext, .post-content, .entry-content, #content"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.html",
+      "typeVersion": 1.2,
+      "position": [
+        2224,
+        320
+      ],
+      "id": "c5f5023a-65b1-49f0-8c1e-4706443a0532",
+      "name": "Extraire contenu",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Loop Over Items').item.json;\nconst texte = ($json.texte_source || '').replace(/\\s+/g, ' ').trim();\nconst tropCourt = texte.length < 150;\nconst cookieWall = /(accepter les cookies|cookie policy|enable javascript|403 forbidden|access denied)/i.test(texte);\nif (tropCourt || cookieWall) {\n  return [{ json: { _skip: true } }];\n}\nreturn [{ json: {\n  source_id: meta.source_id,\n  source_nom: meta.source_nom,\n  profil_analyse: meta.profil_analyse,\n  email_id: 'web',\n  url_source: meta.url,\n  titre_brut: meta.titre || '',\n  texte_brut: texte,\n  origine_texte: meta.origine_texte\n}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2464,
+        320
+      ],
+      "id": "57a32f25-0326-4e1a-b3d7-ef2df14c5165",
+      "name": "valider + préparer insert"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO articles_veille\n  (source_id, source_nom, profil_analyse, email_id, url_source, titre_brut, texte_brut, origine_texte)\nVALUES\n  ($1, $2, $3, $4, $5, $6, $7, $8)\nON CONFLICT ON CONSTRAINT uniq_article_veille DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{ $json.source_id }},{{ $json.source_nom }},{{ $json.profil_analyse }},{{ $json.email_id }},{{ $json.url_source }},{{ $json.titre_brut }},{{ $json.texte_brut }},{{ $json.origine_texte }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2864,
+        352
+      ],
+      "id": "cb4ce12d-60b3-41ae-8f6d-42e6d71226b6",
+      "name": "Insert article web",
+      "credentials": {
+        "postgres": {
+          "id": "uakSDX3SNDasm8pd",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://searxng:8080/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $json.config.search_query }}"
+            },
+            {
+              "name": "format",
+              "value": "json"
+            },
+            {
+              "name": "time_range",
+              "value": "={{ $json.config.freshness || 'week' }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        64,
+        160
+      ],
+      "id": "a1af4f86-a36c-4ed3-9f59-34757badd825",
+      "name": "SearXNG Search1",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "f9ac03f9-ce35-4ef0-8d19-4c0d682debbf",
+              "leftValue": "={{ $json._skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2656,
+        336
+      ],
+      "id": "055d032e-6cb1-4530-9ff9-4dd762ff8c5f",
+      "name": "If"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "est une recherche ?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "est une recherche ?": {
+      "main": [
+        [
+          {
+            "node": "SearXNG Search1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Lire index",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "normaliser Brave": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lire index": {
+      "main": [
+        [
+          {
+            "node": "Extraire liens",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire liens": {
+      "main": [
+        [
+          {
+            "node": "filtrer liens par motif",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filtrer liens par motif": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "collecter URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "collecter URLs": {
+      "main": [
+        [
+          {
+            "node": "URLs déjà vues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "URLs déjà vues": {
+      "main": [
+        [
+          {
+            "node": "ne garder que les nouvelles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ne garder que les nouvelles": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Scraper article",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scraper article": {
+      "main": [
+        [
+          {
+            "node": "Extraire contenu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire contenu": {
+      "main": [
+        [
+          {
+            "node": "valider + préparer insert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "valider + préparer insert": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert article web": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SearXNG Search1": {
+      "main": [
+        [
+          {
+            "node": "normaliser Brave",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert article web",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "84a1b821-275b-4ece-b920-f79cfde4394f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "30ec8b1eda8a151582e85784af303a4c29cf021152bd2d826e291f3489a5ea97"
+  },
+  "id": "VPO3fP7eMsGF7Cgs",
+  "tags": []
+}
