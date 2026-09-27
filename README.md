@@ -128,7 +128,7 @@ This project was not built in a single shotgun generative prompt. It was enginee
 
 **1. The "Architect" Role (Advanced reasoning model, e.g. Claude Opus)**
 - Explores requirements and designs system architecture.
-- Drafts actionable specification sheets (`docs/specs/`) designed for step-by-step execution.
+- Drafts actionable architecture specifications designed for step-by-step execution.
 - Maintains the master progress tracker.
 
 **2. The "Developer" Role (Fast implementation model, e.g. Claude Sonnet)**
@@ -150,7 +150,7 @@ This project was not built in a single shotgun generative prompt. It was enginee
           └──────────► Next step… (rinse and repeat)
 ```
 
-This deliberate multi-model pairing provides diverse perspectives at each phase, catching blind spots early. The design specifications and phase plans are versioned inside [`docs/`](docs/).
+This deliberate multi-model pairing provides diverse perspectives at each phase, catching blind spots early and ensuring a solid system foundation before writing code.
 
 ---
 
