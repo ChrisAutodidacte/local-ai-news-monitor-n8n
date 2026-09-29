@@ -190,7 +190,8 @@ I explore AI, automation, software engineering, and sovereign digital tools — 
 
 ---
 
-### 💼 Contact & Custom Work
-* 📺 English Channel: **[@ChrisFiguresItOut](https://www.youtube.com/@ChrisFiguresItOut)**
-* 📺 French Channel: **[@ChrisAutodidacte](https://www.youtube.com/@ChrisAutodidacte)**
-* 🌐 Business & Consulting: **[chrisconseil.fr](https://chrisconseil.fr)** (Custom AI automation & software workflows)
+### 💼 Contact & Community
+* 🌐 Website & Workshop: **[chrisautodidacte.com/en](https://chrisautodidacte.com/en)**
+* 📺 YouTube Channel: **[@ChrisFiguresItOut](https://www.youtube.com/@ChrisFiguresItOut)**
+* ✉️ Direct Contact: **[contact@chrisconseil.fr](mailto:contact@chrisconseil.fr)**
+
